@@ -1,1 +1,20 @@
-
+name: Zrob mi plik EXE
+on: [push]
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalacja Pythona
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Instalacja bibliotek
+        run: pip install pyinstaller pillow qrcode
+      - name: Robienie EXE
+        run: pyinstaller --noconsole --onefile generator.py
+      - name: Udostepnij plik
+        uses: actions/upload-artifact@v4
+        with:
+          name: Program-QR-Windows
+          path: dist/generator.exe
