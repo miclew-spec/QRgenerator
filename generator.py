@@ -56,8 +56,9 @@ class App:
                 draw.text(((W_PX - tw)//2, y_pos), p, fill="black", font=font)
                 y_pos += 70
             draw.rectangle([5, 5, W_PX-5, H_PX-5], outline="black", width=3)
-            canvas.save(os.path.join(target, f"{i:03d}_{sanitize(txt)}.png"), dpi=(300,300))
+            canvas.save(os.path.join(target, f"{i:03d}_{sanitize(txt)}.png"), dpi=(DPI,DPI))
             self.pb["value"] = i
+            self.status.config(text=f"Generowanie: {i}/{len(lines)}")
             self.root.update()
         messagebox.showinfo("Sukces", "Gotowe!")
 
