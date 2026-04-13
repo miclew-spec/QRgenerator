@@ -3,16 +3,15 @@ from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageDraw, ImageFont
 import qrcode
 
-# USTAWIENIA A6 300 DPI
+# USTAWIENIA A6 300 DPI (1748 x 1240 px)
 W, H = int(148/25.4*300), int(105/25.4*300)
 
-def podzial(t, max_c=18): # Skróciłem max_c, bo przy dużym QR tekst musi być zwarty
-    if len(t) <= max_c or " " not in t: return [t]
-    m = len(t) // 2
-    sp = [i for i, c in enumerate(t) if c == ' ']
-    if not sp: return [t]
-    b = min(sp, key=lambda x: abs(x - m))
-    return [t[:b].strip(), t[b:].strip()]
+def podzial_dla_slabowidzacych(t):
+    # Dla osób niedowidzących lepiej mieć mniej słów w linii, ale ogromnych
+    slowa = t.split()
+    if len(slowa) > 2:
+        return [" ".join(slowa[:len(slowa)//2]), " ".join(slowa[len(slowa)//2:])]
+    return [t]
 
 def nazwa(s):
     s = re.sub(r'[\\/*?:"<>|]', "", s)
@@ -21,10 +20,10 @@ def nazwa(s):
 class Apka:
     def __init__(self, r):
         self.r = r
-        r.title("QR Generator A6 - Duży Kod + Znaczniki")
-        tk.Label(r, text="Wklej listę:").pack(pady=5)
+        r.title("GENERATOR DLA NIEDOWIDZĄCYCH")
+        tk.Label(r, text="Lista potraw / produktów:", font=("Arial", 12, "bold")).pack(pady=5)
         self.t = tk.Text(r, height=15, width=60); self.t.pack(pady=10)
-        tk.Button(r, text="GENERUJ", command=self.go, bg="black", fg="white", font=("Arial", 10, "bold")).pack(pady=10)
+        tk.Button(r, text="GENERUJ ETYKIETY", command=self.go, bg="yellow", fg="black", font=("Arial", 12, "bold")).pack(pady=10)
         self.p = ttk.Progressbar(r, length=400); self.p.pack(pady=10)
 
     def go(self):
@@ -32,7 +31,7 @@ class Apka:
         if not dane: return
         f = filedialog.askdirectory()
         if not f: return
-        cel = os.path.join(f, "ETYKIETY_PRO_A6")
+        cel = os.path.join(f, "ETYKIETY_DLA_NIEDOWIDZACYCH")
         os.makedirs(cel, exist_ok=True)
         self.p["maximum"] = len(dane)
         
@@ -43,44 +42,44 @@ class Apka:
             img = Image.new("RGB", (W, H), "white")
             drw = ImageDraw.Draw(img)
             
-            # 1. KOD QR - Zwiększony do ok. 2/3 wysokości (ok. 67-70%)
-            qr_size = int(H * 0.68) 
-            qr = qrcode.make(txt).convert("RGB").resize((qr_size, qr_size))
-            img.paste(qr, ((W - qr_size)//2, int(H * 0.05)))
+            # 1. GIGANTYCZNY KOD QR (zajmuje ok. 70% wysokości)
+            # Używamy wysokiej korekcji błędów (ERROR_CORRECT_H), żeby kod był czytelny nawet przy słabym świetle
+            qr_api = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=10, border=1)
+            qr_api.add_data(txt)
+            qr_api.make(fit=True)
+            qr_img = qr_api.make_image(fill_color="black", back_color="white").convert("RGB")
             
-            # 2. TEKST - Pogrubiony, dopasowany pod duży kod
-            try: fnt = ImageFont.truetype("arialbd.ttf", 110)
+            qr_size = int(H * 0.70)
+            qr_img = qr_img.resize((qr_size, qr_size), Image.NEAREST)
+            img.paste(qr_img, ((W - qr_size)//2, 20))
+            
+            # 2. TEKST - EKSTREMALNIE DUŻY I POGRUBIONY
+            # Zwiększona czcionka do 130-150 pkt dla maksymalnej czytelności
+            try: fnt = ImageFont.truetype("arialbd.ttf", 140)
             except: fnt = ImageFont.load_default()
             
-            linie = podzial(txt)
-            y_text = int(H * 0.75) # Start tekstu zaraz pod wielkim kodem
+            linie = podzial_dla_slabowidzacych(txt)
+            y_text = int(H * 0.72)
             
             for linia in linie:
                 tw = drw.textlength(linia, font=fnt)
+                # Rysujemy tekst
                 drw.text(((W - tw)//2, y_text), linia, fill="black", font=fnt)
-                y_text += 120
+                y_text += 150 # Duży odstęp między liniami, żeby litery się nie zlewały
                 
-            # 3. LINIE CIĘCIA (Zamiast ramki)
-            # Rysujemy małe "narożniki" na krawędziach formatu A6
-            L = 40 # Długość linii cięcia
-            # Lewy górny
-            drw.line([(0, 0), (L, 0)], fill="black", width=2)
-            drw.line([(0, 0), (0, L)], fill="black", width=2)
-            # Prawy górny
-            drw.line([(W, 0), (W-L, 0)], fill="black", width=2)
-            drw.line([(W, 0), (W, L)], fill="black", width=2)
-            # Lewy dolny
-            drw.line([(0, H), (L, H)], fill="black", width=2)
-            drw.line([(0, H), (0, H-L)], fill="black", width=2)
-            # Prawy dolny
-            drw.line([(W, H), (W-L, H)], fill="black", width=2)
-            drw.line([(W, H), (W, H-L)], fill="black", width=2)
+            # 3. ZNACZNIKI CIĘCIA (bardzo delikatne, by nie rozpraszały)
+            L = 30
+            for x, y in [(0,0), (W,0), (0,H), (W,H)]:
+                x1 = x; y1 = y
+                x2 = x-L if x > 0 else x+L
+                y2 = y-L if y > 0 else y+L
+                drw.line([(x, y1), (x2, y1)], fill="#CCCCCC", width=1) # Jasnoszare, żeby nie myliły się z tekstem
+                drw.line([(x1, y), (x1, y2)], fill="#CCCCCC", width=1)
             
-            # ZAPIS
             img.save(os.path.join(cel, f"{i:04d}_{nazwa(txt)}.png"), dpi=(300,300))
             self.p["value"] = i; self.r.update()
             
-        messagebox.showinfo("OK", "Wygenerowano etykiety ze znacznikami cięcia!")
+        messagebox.showinfo("Gotowe", "Etykiety o wysokiej czytelności zostały zapisane.")
 
 if __name__ == "__main__":
     root = tk.Tk(); Apka(root); root.mainloop()
